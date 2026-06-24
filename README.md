@@ -2,8 +2,6 @@
 
 
 # Multi-Agent Knowledge Guide System
-
-> **Confidentiality note:** This is a generalized, independently written technical case study. Names, examples, schemas, timings, identifiers, and operating details are illustrative or intentionally abstracted. It contains no customer data, source code, credentials, internal URLs, unpublished product information, or employer-specific implementation details. Public Google Cloud product names are used only to explain a reference architecture.
 >
 > **What this is:** A proof-of-concept and technical learning journal. It documents the design approach, lessons, limitations, and possible improvements for a multi-agent knowledge system without representing any specific organization's production environment.
 
@@ -20,9 +18,9 @@
 - [Google Chat Integration — The Hard Part](#google-chat-integration--the-hard-part)
 - [Active Issues — Still Learning](#active-issues--still-learning)
 - [Security & IAM](#security--iam)
-- [No-Code / Low-Code Context — Why This Matters Now](#no-code--low-code-context--why-this-matters-now)
-- [Next Steps](#next-steps)
-- [Reusing This Reference](#reusing-this-reference)
+- [Prompt-Driven Agent Development](#prompt-driven-agent-development)
+- [Strategic Roadmap](#strategic-roadmap)
+- [Closing Perspective](#closing-perspective)
 
 ---
 
@@ -34,7 +32,7 @@ The hypothesis was simple: **what if your team could ask questions in plain Engl
 
 This POC tests that hypothesis using Google Cloud's Vertex AI Agent Platform to orchestrate multiple specialised AI agents — one for documents, one for issue tracking data, one for source code — all reachable through a single conversational interface.
 
-It is not finished. It works, imperfectly, and that's the point. This document is as much about what I learned designing and building it as it is a technical spec.
+This document is as much about what I learned designing and building it as it is a technical spec.
 
 ---
 
@@ -174,7 +172,7 @@ gs://[PROJECT]-program-docs/
 
 ---
 
-### Pillar 2 (Issue agent) — Issue tracker data (BigQuery)
+### Pillar 2 (Issue agent)— Issue tracker data (BigQuery)
 
 #### What is the issue data source?
 
@@ -244,26 +242,13 @@ WHERE status = 'OPEN'
 
 ---
 
-### Pillar 3 (Code agent) — Source code (Cloud Storage / .txt files)
+### Pillar 3 (Code agent)— Source code (Cloud Storage / .txt files)
 
 Source files are exported from the code repository as `.txt` files via CI/CD and indexed by Vertex AI Search.
 
 **Why .txt and not direct repo integration?**
 
-Direct repository integration was the original plan. I moved away from it for the POC because: Vertex AI Search indexes unstructured text rather than code natively; real-time repo webhooks add significant middleware complexity; and `.txt` export via Cloud Build gives me control over exactly which files are indexed (no generated files, no binaries). This is a deliberate short-term compromise — see [Next Steps](#next-steps) for where this goes.
-
-**CI/CD export step (Cloud Build):**
-```yaml
-- name: 'gcr.io/cloud-builders/gsutil'
-  entrypoint: 'bash'
-  args:
-    - '-c'
-    - |
-      find ./src -name '*.py' -o -name '*.go' -o -name '*.java' | while read f; do
-        dest="gs://${PROJECT}-code-snapshots/${f}.txt"
-        gsutil cp "$f" "$dest"
-      done
-```
+Direct repository integration was the original plan. I moved away from it for the POC because: Vertex AI Search indexes unstructured text rather than code natively; real-time repo webhooks add significant middleware complexity; and `.txt` export via Cloud Build gives me control over exactly which files are indexed (no generated files, no binaries). This is a deliberate short-term compromise — see the [Strategic Roadmap](#strategic-roadmap) for where this goes.
 
 **What works well:** "What does function X do?", "Explain this module", "What parameters does API Y accept?"
 
@@ -464,108 +449,88 @@ Separate service identities should be used for agent execution, webhook middlewa
 
 ---
 
-## No-Code / Low-Code Context — Why This Matters Now
+## Prompt-Driven Agent Development
 
-This POC sits at an interesting intersection: it was built by engineers, using tools that are themselves products of the no-code / low-code revolution. Understanding where that ecosystem is heading contextualises both what this system can do today and where the remaining rough edges will be smoothed out by the platforms themselves.
+Agent development is increasingly shifting from code-first implementation to prompt-driven configuration. This enables domain experts to translate their knowledge directly into agent behavior using clear instructions, logical reasoning, examples, guardrails, and visual workflows.
 
-### The three waves
+A product manager can define how feature-status questions should be interpreted. A support lead can describe escalation rules. A program manager can specify how risks, dependencies, and decisions should be summarized. Subject-matter experts can prototype and validate agent behavior without first translating every requirement into a detailed software specification.
 
-**Wave 1 — Automation & publishing (2012–2018)**
-Zapier, IFTTT, Wix, Airtable. Simple connectors and content tools. The ceiling was low — any non-trivial logic required engineering handoff.
+### What Domain Experts Can Configure
 
-**Wave 2 — Visual app builders (2018–2022)**
-Visual development platforms expanded full-stack application creation and made enterprise data more accessible to non-engineering teams.
+| Domain input | Agent configuration |
+|---|---|
+| Business terminology and context | Instructions, glossary, examples, and grounding sources |
+| Decision logic | Natural-language rules, conditions, and routing steps |
+| Expected responses | Templates, structured output formats, tone, and audience-specific summaries |
+| Boundaries | Guardrails, prohibited actions, access constraints, and escalation rules |
+| Human judgment points | Approval checkpoints for sensitive or high-impact actions |
+| Quality expectations | Evaluation questions, expected answers, and acceptance criteria |
 
-**Wave 3 — AI-native builders (2022–present)**
+### The Development Approach
 
-| Category | Platforms | What changed |
-|---|---|---|
-| AI agent builders | Vertex AI Agent Platform, Microsoft Copilot Studio | Configure multi-agent pipelines in natural language |
-| App generators | v0, Lovable, bolt.new | Describe the interface → get working code |
-| Embedded AI copilots | Power Platform, Google AppSheet | AI generates workflow logic inside the builder canvas |
-| Enterprise AI layers | Managed enterprise copilots | Natural-language access over governed business data |
+1. **Define the role:** Clarify what the agent is responsible for and whom it serves.
+2. **Connect approved knowledge:** Ground it in documents, structured data, and other governed sources.
+3. **Express the reasoning flow:** Describe how the agent should classify, route, compare, summarize, and escalate.
+4. **Add examples and guardrails:** Demonstrate expected responses, edge cases, prohibited behavior, and human-review points.
+5. **Evaluate real scenarios:** Test representative domain questions and refine the prompts and configuration.
 
-### Where this POC fits
-
-This system is a Wave 3 product built with Wave 3 tools. The agent configuration, data store connections, and routing logic were set up through Vertex AI Agent Platform's console — no ML code written. What required an ML engineering team in 2021 is now configuration work.
-
-The remaining friction — NL-to-SQL inconsistency, indexing latency, and chat response constraints — reflects the maturity of current managed platforms. As governed natural-language query layers improve, some custom intermediary components may become unnecessary.
-
-**The design implication:** The architectural decisions in this system that feel like engineering compromises (batch exports, `.txt` code snapshots, threading-based async) are mostly temporary workarounds for platform gaps that are actively closing. Build for the platform to meet you — do not over-engineer permanent solutions to what the managed service will solve in 18 months.
-
-### Current no-code / low-code limitations
-
-- Real-time, latency-sensitive systems requiring sub-second guarantees
-- Complex stateful distributed architectures with custom consistency models
-- Fine-grained performance optimisation at scale
-- Deep security review and compliance-critical infrastructure
-
-Everything else is converging.
+Prompt-driven development does not eliminate the need for engineering. Engineers remain essential for secure integrations, identity management, observability, performance, deployment, and production governance. It brings domain experts closer to the design process, allowing them to shape and improve agent behavior using the language and logic of their work.
 
 ---
 
-## Next Steps
+## Strategic Takeaway
 
 This POC validated the core hypothesis: a multi-agent system can meaningfully answer cross-domain questions about a program using documents, issue tracker data, and source code — all through a conversational Google Chat interface. That part works.
 
-What follows are the natural directions to explore if this POC is taken further. These are not a project plan — they are open questions and known gaps that the POC surfaced, roughly grouped by what they address.
+The next phase is to evolve the system from a text-based knowledge assistant into an adaptive, multimodal learning and decision-support experience. The roadmap below represents strategic capability areas rather than committed delivery dates.
 
-### Fix the known issues first
+### 1. Multimodal outputs aligned with the user journey
 
-Before building anything new, the three active issues documented above should be resolved. They are the most user-visible problems and have clear solutions that do not require new architecture:
+The agent should select the most useful output format based on the user's role, question, and stage in the journey:
 
-- Use a managed task queue for durable asynchronous processing
-- Add a SQL validation layer and schema synchronization
-- Switch to incremental BigQuery MERGE and add an Eventarc re-index trigger (reduces data staleness)
+- **Visual outputs:** Process flows, technical architectures, product blueprints, dependency maps, timelines, and onboarding journeys.
+- **Audio outputs:** Spoken summaries, guided walkthroughs, and accessible learning content.
+- **Video outputs:** Short e-learning modules, product demonstrations, and role-based onboarding videos generated from approved knowledge.
+- **Structured artifacts:** Briefing documents, checklists, status summaries, and presentation-ready content.
 
-None of these require changing the agent design or the data store structure — they are improvements to the plumbing.
+The objective is not to produce every modality for every query. It is to generate the right artifact at the right point in the user journey.
 
-### Data freshness and real-time sync
+### 2. Voice-based interaction
 
-The batch export architecture is the biggest gap between "POC" and "production-useful". The path forward:
+Enable users to speak naturally with the agent and receive either spoken or visual responses. This could support hands-free information retrieval, conversational onboarding, accessibility, meeting preparation, and field-based workflows.
 
-- **For issue data:** Where an authorized change feed is available, process incremental updates instead of repeatedly exporting the full dataset.
-- **For code:** Replace the `.txt` snapshot approach with a direct connector to Cloud Source Repositories or a GitHub/GitLab integration. Vertex AI Search has a native repository connector that eliminates the CI/CD export step entirely.
-- **For documents:** Add document version metadata so the agent can surface "this document was last updated 6 months ago" alongside its answers, making staleness visible rather than invisible.
+Voice interaction will require speech recognition, response streaming, interruption handling, session context, and the same identity and authorization controls applied to text-based access.
 
-### Reliability of the Chat integration
+### 3. Continuous agent evaluation
 
-The current async threading approach is fragile. The recommended next step is Cloud Tasks (code already in this document). Beyond that, a Pub/Sub-based architecture decouples every component:
+Establish evaluation as an ongoing product capability rather than a one-time test:
 
-- Chat event → Pub/Sub topic → subscriber calls agent → response posted back to Chat
-- Each component can fail and retry independently, with no coupling to Cloud Function instance lifecycle
+- Build representative test sets for technical, product, business, and onboarding users.
+- Measure groundedness, accuracy, completeness, routing quality, safety, latency, and cost.
+- Add human review for subjective or high-impact responses.
+- Run regression evaluations whenever prompts, models, tools, schemas, or data sources change.
+- Capture user feedback and production failure patterns as new evaluation cases.
 
-### Agent quality
+### 4. Governed self-improvement
 
-The POC demonstrated that routing accuracy and response quality are primarily determined by the system prompt, not the model. The next investments here:
+A self-improvement capability is possible when it is bounded by evaluation and governance. The agent should not autonomously rewrite and deploy its production instructions.
 
-- **Eval harness:** A test set of representative questions with expected answers, run against the agent after every system prompt change. Right now, changes are validated manually.
-- **User feedback loop:** A thumbs up/down reaction in Chat that logs to BigQuery, creating a training signal for which responses are actually useful.
-- **Multi-turn memory:** The current session management is per-user-per-space but the agent does not use prior turns well. Improving context carry-over would make follow-up questions work naturally.
+Instead, an improvement agent could:
 
-### Expanding the data surface
+- Analyze failed queries, low-rated responses, routing errors, and recurring knowledge gaps.
+- Identify likely causes such as unclear prompts, missing examples, stale content, or weak tool selection.
+- Propose revised instructions, routing rules, evaluation cases, or knowledge-source updates.
+- Test proposed changes in a sandbox against the evaluation suite.
+- Submit evidence and recommendations for human approval before deployment.
 
-The three current pillars (documents, issues, code) cover the most common question types. Natural additions:
-
-- **Meeting notes and decisions:** Recorded meeting transcripts or decision logs are a common source of "why did I do it this way?" questions that documents don't capture well.
-- **Monitoring and SLOs:** Connecting to Cloud Monitoring or a metrics store would let the agent answer "is the service healthy right now?" alongside "what is the SLA supposed to be?".
-- **On-call history:** Past incident timelines and post-mortems are highly valuable for new team members and are often trapped in docs no one reads.
-
-### If this moves toward production
-
-A few things that are deliberately out of scope for the POC but would matter at scale:
-
-- **Per-document access control:** Right now, every user in the Chat space can query every document in the bucket. A production system needs to respect the same access controls as the source documents.
-- **Audit logging dashboard:** Cloud Logging already captures all data access — it just needs a dashboard to make it reviewable.
-- **Cost model:** Vertex AI Search, BigQuery, and Cloud Functions all have usage-based costs. At low POC volume these are negligible; at team-wide adoption they need to be monitored.
-- **Multi-space / multi-program support:** The current design serves one program's data. A shared infrastructure model would let multiple programs each bring their own data stores and share the orchestration layer.
+This creates a controlled learning loop: **observe → diagnose → propose → evaluate → approve → deploy → monitor**.
 
 ---
 
-## Reusing This Reference
+## Closing Perspective
 
-Teams adapting this pattern should use their own approved repositories, naming conventions, access controls, data-classification rules, and review process. Before publishing implementation details, confirm that examples contain no customer information, employee identifiers, internal URLs, credentials, proprietary schemas, unpublished metrics, or source code.
+This POC demonstrates that building useful enterprise agents is no longer limited to AI engineers. With domain expertise, clear prompts, logical reasoning, governed data, and no-code platforms, business and technical experts can directly shape agents around real user needs.
+
+The opportunity ahead is to move beyond text-based answers toward multimodal, conversational, continuously evaluated experiences. As these systems evolve, human judgment, responsible governance, and measurable quality must remain central to how agents learn, improve, and earn trust.
 
 ---
-
-*NDA-safe external edition. Reviewed and generalized: June 2026.*
