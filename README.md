@@ -527,7 +527,7 @@ This creates a controlled learning loop: **observe → diagnose → propose → 
 
 ---
 
-## Strategic Takeaway
+## Closing Perspective
 
 This POC demonstrates that building useful enterprise agents is no longer limited to AI engineers. With domain expertise, clear prompts, logical reasoning, governed data, and no-code platforms, business and technical experts can directly shape agents around real user needs.
 
